@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Sidekick · Tim Hortons profile bridge",
+  "version": "0.1.0",
+  "description": "Connect Sidekick to your existing Tim Hortons tab through a paired local bridge.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["https://www.timhortons.ca/*", "https://timhortons.ca/*", "http://127.0.0.1:4317/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{ "matches": ["https://www.timhortons.ca/*", "https://timhortons.ca/*"], "js": ["content.js"], "run_at": "document_idle", "all_frames": false }],
+  "action": { "default_popup": "popup.html", "default_title": "Sidekick Tim Hortons connection" },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' ws://127.0.0.1:4317" }
+}

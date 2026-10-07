@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f6f3">
+  <title>Sidekick · Your voice, connected to the world</title>
+  <meta name="description" content="An accessible voice companion that sees what you share, checks nearby places, and helps you get things done.">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#voice-controls">Skip to voice controls</a>
+  <header class="site-header"><h1 id="main-title">Sidekick</h1></header>
+  <main class="workspace">
+    <section class="voice-panel" aria-labelledby="main-title">
+      <div class="voice-stage" id="voice-stage" data-state="ready" role="status" aria-live="polite" aria-atomic="true">
+        <div class="voice-symbol" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="voice-status"><p id="voice-label">Ready when you are.</p><p id="voice-detail">Start Sidekick. Then just say what you need.</p></div>
+      </div>
+      <div class="voice-controls" id="voice-controls">
+        <button class="button button-primary talk-button" id="talk-button" type="button"><span id="talk-button-label">Start Sidekick</span></button>
+        <button class="button button-secondary mute-button" id="mute-button" type="button" aria-pressed="false" disabled hidden>Mute</button>
+      </div>
+      <div class="status-notice" id="notice" role="status" aria-live="polite" hidden></div>
+    </section>
+    <details class="demo-evidence" id="demo-evidence">
+      <summary>View demo evidence</summary>
+      <div class="evidence-content">
+        <p class="evidence-intro">Optional judge view. Sidekick’s everyday interface is the voice conversation.</p>
+        <div class="header-meta"><span class="connection-dot" id="connection-dot" aria-hidden="true"></span><span id="connection-status">Connecting to Alebex</span><span id="model-label">Voice by Alebex · Vision connected</span></div>
+        <section class="evidence-section" aria-labelledby="evidence-title"><div class="section-heading"><h2 id="evidence-title">Tools and website evidence</h2><span class="capability-chip" id="phone-chip" aria-label="Website ordering unavailable">Website ordering unavailable</span></div><div class="website-task-status" id="website-task-status" role="status" aria-live="polite" aria-atomic="true" hidden></div><div class="activity-list" id="activity-list" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Tool activity and sources"><p class="empty-copy" id="activity-empty">Tool sources and results appear here.</p></div></section>
+        <section class="task-inspection" aria-label="Judge website task inspection"><button class="button button-secondary" id="inspect-task-button" type="button">Inspect website task</button><p id="task-inspection-status" role="status" aria-live="polite"></p><details id="task-inspection-details"><summary>Website task details</summary><pre id="task-inspection-json" tabindex="0" aria-label="Actual server website task result and trace">Inspect the website task to read its actual server result.</pre></details></section>
+        <section class="tims-setup" aria-labelledby="tims-setup-title"><h2 id="tims-setup-title">Connected Chrome and order review</h2><div class="context-controls"><button class="button button-secondary" id="tims-account-button" type="button">Check connected Chrome profile</button><button class="button button-secondary" id="tims-review-button" type="button">Open secure order review</button></div><p>Sidekick uses Tim Hortons in your existing Chrome profile. Sign in and set up payment directly on the website. Keep passwords and payment details out of the voice conversation.</p></section>
+        <section class="conversation-section" aria-labelledby="conversation-title"><div class="section-heading"><h2 id="conversation-title">Conversation transcript</h2><span class="small-label" id="conversation-count">Live voice</span></div><div class="conversation" id="conversation" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Conversation transcript"><p class="empty-copy" id="conversation-empty">Your conversation will appear here as you talk.</p></div></section>
+        <section class="camera-section" aria-labelledby="camera-title"><div class="section-heading"><h2 id="camera-title">Camera evidence</h2><span id="camera-status" class="small-label">Camera off</span></div><div class="camera-preview" id="camera-preview"><video id="camera-video" autoplay muted playsinline aria-label="Live camera preview" hidden></video><img id="uploaded-image" alt="Image you selected to share with Sidekick" hidden><div class="camera-empty" id="camera-empty"><p>The camera starts when you ask Sidekick to look.</p></div><span class="camera-source" id="camera-source" hidden>Live camera</span></div><div class="context-controls"><button class="button button-secondary" id="camera-button" type="button" aria-pressed="false">Turn on camera</button><button class="button button-ink" id="capture-button" type="button" disabled>Look at this</button></div><div class="image-options"><label for="image-upload" class="upload-label">Share a photo</label><input type="file" id="image-upload" accept="image/*" class="sr-only"><button class="button button-text" id="demo-menu-button" type="button">Try a demo menu</button></div><p class="demo-image-notice" id="demo-image-notice" role="status" hidden>Demonstration image — not a live café menu.</p><label for="vision-question">Optional judge image question</label><input class="image-question" id="vision-question" maxlength="600" placeholder="What should Sidekick look for?" autocomplete="off"></section>
+        <section class="location-section" aria-labelledby="location-title"><div class="section-heading"><h2 id="location-title">Location evidence</h2><span class="small-label" id="location-source">No location shared</span></div><p id="location-detail">Sidekick requests GPS when the voice conversation starts.</p><div class="context-controls"><button class="button button-secondary" id="location-button" type="button">Share my location</button><button class="button button-text" id="demo-location-button" type="button">Use demo location</button></div><p class="location-accuracy" id="location-accuracy" hidden></p></section>
+        <section class="suggestions" aria-label="Judge test requests"><h2>Judge test requests</h2><div class="suggestion-list"><button type="button" data-prompt="What is in front of me? Read any useful visible text.">Describe the camera</button><button type="button" data-prompt="Find a coffee shop close to my current location.">Find nearby coffee</button><button type="button" data-prompt="Find the closest public washroom to my current location.">Find a washroom</button><button type="button" data-prompt="Help me prepare an order on the Tim Hortons website. Ask me which branch, items, sizes, and maximum total budget to use.">Prepare a Tim Hortons order</button></div></section>
+        <div class="listen-only-controls"><button class="button button-secondary" id="listen-only-button" type="button">Listen-only judge mode</button><p>Hear the real voice agent and use typed requests without opening the microphone.</p></div>
+        <details class="test-tools" id="test-tools" hidden><summary>Send a typed judge request</summary><form id="text-form"><label for="text-request">Request</label><input id="text-request" maxlength="1000" placeholder="Ask Sidekick something…" autocomplete="off"><button class="button button-secondary" type="submit">Send</button></form></details>
+      </div>
+    </details>
+  </main>
+  <div class="sr-only" id="screen-reader-status" role="status" aria-live="polite"></div>
+</body>
+</html>

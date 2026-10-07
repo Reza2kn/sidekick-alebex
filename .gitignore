@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.local/
+.DS_Store
+research/*.json
+artifacts/*
+!artifacts/sidekick-voice-first.jpg
