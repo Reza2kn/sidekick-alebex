@@ -45,7 +45,7 @@ npm test
 
 ## Submission
 
-The initial version was submitted on **October 7, 2026 at 3:35 p.m. Vancouver time** as **Sidekick — Your voice, connected to the world**, team **Sidekick · Solo**. [Alebex project](https://community.alebex.ai/#project/1a3db80c-cd91-4199-989b-8c8d0bad46bd). [SUBMISSION-DRAFT.md](SUBMISSION-DRAFT.md) records the updated project copy and verification limits.
+The initial version was submitted on **October 7, 2026 at 3:35 p.m. Vancouver time** as **Sidekick — Your voice, connected to the world**, team **Sidekick · Solo**. The current version and GitHub link were saved at **4:19:58 p.m.**; the portal confirmed it is submitted and visible to the participant, judges, and admin. [Alebex project](https://community.alebex.ai/#project/1a3db80c-cd91-4199-989b-8c8d0bad46bd). [SUBMISSION-DRAFT.md](SUBMISSION-DRAFT.md) records the project copy and verification limits.
 
 Repository: [Reza2kn/sidekick-alebex](https://github.com/Reza2kn/sidekick-alebex)
 
