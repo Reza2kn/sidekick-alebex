@@ -4,6 +4,7 @@ import { join, extname, resolve } from 'node:path';
 import { randomUUID, randomBytes, timingSafeEqual, createHmac } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { ROOT, readConfig, redact, alebex } from './lib/config.mjs';
+import { selectRequestedTimBranch } from './lib/order-branch.mjs';
 
 const sessions = new Map();
 const jobs = new Map();
@@ -15,17 +16,21 @@ let activeCalls = 0;
 let phoneCallsStarted = 0;
 let browserJobsStarted = 0;
 let profileBridge;
-function webOrderReady(cfg) { return Boolean(cfg.OPENROUTER_API_KEY && (cfg.PROFILE_BROWSER_REQUIRED !== 'true' || profileBridge?.isConnected())); }
+function webOrderReady(cfg) {
+  const key = cfg.BROWSER_ORDER_PROVIDER === 'openai' ? cfg.OPENAI_API_KEY : cfg.OPENROUTER_API_KEY;
+  return Boolean(key && (cfg.PROFILE_BROWSER_REQUIRED !== 'true' || profileBridge?.isConnected()));
+}
 
 const webOrderDefinitions = [
-  { name: 'prepare_tim_hortons_order', description: 'Use the actual Tim Hortons website to prepare a cart after the person supplies the branch address and exact items including sizes and customizations. Inputs must come from this conversation. Do not ask for a maximum budget. Include a spending limit only if the person volunteers one. It runs in the background while the person keeps talking. It never pays or submits an order. Ask for missing branch or item details first; purchase requires a new spoken approval of the actual website total.', parameters: {
+  { name: 'prepare_tim_hortons_order', description: 'Prepare the actual Tim Hortons website cart at the same branch the person chose from find_nearby_places. Pass that result’s place_id so its address stays fixed. For an explicitly supplied new branch, pass branch_address. Preserve the chosen restaurant for both pickup and delivery; never substitute a different restaurant based on the delivery address. Include exact items, sizes and customizations from this conversation. Do not ask for a maximum budget; include a limit only if volunteered. Preparation runs while the person keeps talking. Purchase requires new spoken approval of the actual website total.', parameters: {
     type: 'object', properties: {
-      branch_address: { type: 'string', description: 'The chosen Tim Hortons pickup address, including Vancouver or its city. Never a hardcoded demo branch.' },
+      place_id: { type: 'string', description: 'The exact place_id returned by find_nearby_places for the Tim Hortons the person chose. Its stored address becomes the fixed ordering branch.' },
+      branch_address: { type: 'string', description: 'Only needed if the person explicitly supplies a different branch instead of choosing a search result. Exact restaurant street address and city. This is never the delivery destination.' },
       items: { type: 'array', items: { type: 'string' }, description: 'Exact requested items, quantities, sizes, and customizations.' },
       budget_cad: { type: 'number', description: 'Optional spending limit in Canadian dollars, only if explicitly volunteered by the person. Do not ask for it. Omit when none was provided.' },
       service_mode: { type: 'string', enum: ['pickup', 'delivery'] },
       delivery_confirmation_id: { type: 'string', description: 'Required for delivery. The id returned by prepare_delivery_address, after its address has been explicitly confirmed in a new spoken turn.' }
-    }, required: ['branch_address', 'items']
+    }, required: ['items']
   } },
   { name: 'approve_tim_hortons_order', description: 'Continue an existing website cart only after the person has heard its exact verified branch, items, and total and explicitly approves that specific total in a new spoken turn. Payment or account setup may require secure human takeover. Never claim an order was placed without the website confirmation.', parameters: {
     type: 'object', properties: { task_id: { type: 'string' } }, required: ['task_id']
@@ -192,7 +197,14 @@ async function handleTool(name, args, session, call) {
     return taskToolResult(session, result);
   }
   if (name === 'prepare_tim_hortons_order') {
-    const branchAddress = String(args.branch_address || '').trim().slice(0, 240);
+    let branchSelection;
+    try {
+      branchSelection = selectRequestedTimBranch({ placeId: args.place_id, branchAddress: args.branch_address,
+        offeredPlaceId: session.offeredTimPlaceId }, session.places);
+    } catch (error) {
+      return taskToolResult(session, { status: 'needs_details', spoken: error.message });
+    }
+    const { branchAddress } = branchSelection;
     const items = Array.isArray(args.items) ? args.items.filter(x => typeof x === 'string').map(x => x.trim().slice(0, 240)).filter(Boolean).slice(0, 8) : [];
     const explicitLimit = args.budget_cad !== undefined && args.budget_cad !== null;
     const budget = explicitLimit ? Number(args.budget_cad) : 100;
@@ -209,7 +221,7 @@ async function handleTool(name, args, session, call) {
       draft.confirmedAt ||= Date.now();
       deliveryConfirmation = { source: 'spoken_confirmation', confirmed_at: draft.confirmedAt, address: draft.address, contact_phone: draft.deliveryContactPhone };
     }
-    const request = { branchAddress, items, budgetCad: budget, budgetSource: explicitLimit ? 'explicit_user_limit' : 'demo_cap', serviceMode, deliveryAddress, ...(deliveryContactPhone ? { deliveryContactPhone } : {}), ...(deliveryConfirmation ? { deliveryConfirmation } : {}) };
+    const request = { ...branchSelection, items, budgetCad: budget, budgetSource: explicitLimit ? 'explicit_user_limit' : 'demo_cap', serviceMode, deliveryAddress, ...(deliveryContactPhone ? { deliveryContactPhone } : {}), ...(deliveryConfirmation ? { deliveryConfirmation } : {}) };
     const requestKey = orderRequestKey(request), turnKey = `${session.userVersion}:${requestKey}`;
     session.orderRequests ||= new Map();
     const existing = jobs.get(session.orderRequests.get(turnKey));
@@ -300,7 +312,11 @@ async function handleTool(name, args, session, call) {
     return taskToolResult(session, task.public);
   }
   const { handleLocalTool } = await import('./lib/tools.mjs');
-  return handleLocalTool(name, args, session);
+  const result = await handleLocalTool(name, args, session);
+  if (name === 'find_nearby_places' && args.brand === 'tim_hortons' && result.ok) {
+    session.offeredTimPlaceId = result.place_id || null;
+  }
+  return result;
 }
 
 async function placeCall(task) {
@@ -337,7 +353,29 @@ async function runWebOrder(task) {
     task.public = { ...task.public, ...safe, preview_url: task.screenshot ? `/api/browser/${task.id}/screenshot` : undefined };
     if (session) send(session, 'job_update', task.public);
   };
+  update({ status: 'browsing', spoken: `I’m selecting the Tim Hortons at ${task.request.branchAddress} for this order.` });
+  const { resolveTimLocation } = await import('./lib/tim-locations.mjs');
+  const location = await resolveTimLocation(task.request.branchAddress);
+  if (!location?.ok || !location.pickupUrl) return finishTask(task, 'needs_input', `I couldn’t verify an official ordering link for the Tim Hortons at ${task.request.branchAddress}. ${location?.message || 'Please give its exact street address and city.'}`);
+  // Only links copied from this exact branch's official page reach the browser.
+  // The delivery destination never determines or replaces the chosen merchant.
+  const entryUrl = task.request.serviceMode === 'delivery' ? location.deliveryUrl : location.pickupUrl;
+  if (!entryUrl) return finishTask(task, 'delivery_unavailable', `The Tim Hortons at ${task.request.branchAddress} does not publish a verified delivery ordering link. I can prepare pickup at this same branch, or use another branch you choose.`, { branch: { requested_address: task.request.branchAddress, verified: false }, order_submitted: false });
+  task.location = location;
+  const branchEntry = { pickupUrl: entryUrl, storeNumber: location.store_number };
   if (cfg.BROWSER_ORDER_OPERATOR === 'true') {
+    if (cfg.BROWSER_ORDER_PREPARE_EXECUTOR === 'openai') {
+      task.operatorMode = true;
+      update({ status: 'browsing', spoken: 'I’m opening the actual cart and preparing your requested items. No payment will be made during preparation.', source: 'OpenAI browser preparation' });
+      const { prepareWebOrder } = await browserModuleFor(task);
+      const result = await prepareWebOrder({ ...task.request, ...branchEntry, jobId: task.id,
+        deliveryAddressConfirmed: task.request.serviceMode === 'delivery',
+        profileDriver: profileBridge?.isConnected() ? profileBridge.driver() : undefined,
+        preparationExecutor: 'openai', approvalMode: 'operator',
+        config: { ...cfg, BROWSER_ORDER_MAX_STEPS: 40, BROWSER_ORDER_TIMEOUT_MS: 180000 }, emit: update });
+      completeWebOrderReview(task, result);
+      return;
+    }
     const { beginOperatorWebOrder } = await browserModuleFor(task);
     const result = await beginOperatorWebOrder({ ...task.request, jobId: task.id,
       deliveryAddressConfirmed: task.request.serviceMode === 'delivery',
@@ -347,13 +385,8 @@ async function runWebOrder(task) {
     update({ ...result, status: 'awaiting_operator', spoken: `I’m preparing ${task.request.items.join(', ')} at ${task.request.branchAddress}. I’ll check the actual cart and exact total before asking for approval.`, source: 'Tim Hortons website task' });
     return;
   }
-  update({ status: 'browsing', spoken: 'I’m checking the selected pickup branch on the Tim Hortons website.' });
-  const { resolveTimLocation } = await import('./lib/tim-locations.mjs');
-  const location = await resolveTimLocation(task.request.branchAddress);
-  if (!location?.pickupUrl) return finishTask(task, 'needs_input', 'I couldn’t uniquely match that pickup address on the official Tim Hortons site. Please give the exact street address and city.');
-  task.location = location;
   const { prepareWebOrder } = await import('./lib/browser-order.mjs');
-  const result = await prepareWebOrder({ ...task.request, pickupUrl: task.request.serviceMode === 'delivery' ? undefined : location.pickupUrl, deliveryAddressConfirmed: task.request.serviceMode === 'delivery', profileDriver: profileBridge?.isConnected() ? profileBridge.driver() : undefined, timSessionId: profileBridge?.isConnected() ? undefined : session?.timSessionId, jobId: task.id, config: { ...cfg, BROWSER_ORDER_MAX_STEPS: 40, BROWSER_ORDER_TIMEOUT_MS: 180000 }, emit: update });
+  const result = await prepareWebOrder({ ...task.request, ...branchEntry, deliveryAddressConfirmed: task.request.serviceMode === 'delivery', profileDriver: profileBridge?.isConnected() ? profileBridge.driver() : undefined, timSessionId: profileBridge?.isConnected() ? undefined : session?.timSessionId, jobId: task.id, config: { ...cfg, BROWSER_ORDER_MAX_STEPS: 40, BROWSER_ORDER_TIMEOUT_MS: 180000 }, emit: update });
   completeWebOrderReview(task, result);
 }
 function completeWebOrderReview(task, result) {
@@ -362,7 +395,7 @@ function completeWebOrderReview(task, result) {
     result.status = Number.isFinite(result.total_cad) ? 'ready_for_review' : 'cart_prepared';
     const cart = result.items.map(item => `${item.quantity} ${item.requested || item.visible_name || ''}`).join(', ');
     const delivery = result.service_mode === 'delivery' ? ` Delivery is to ${result.delivery_address_quote || task.request.deliveryAddress}${result.delivery_instructions_quote ? `, ${result.delivery_instructions_quote}` : ''}.` : '';
-    const merchant = result.service_mode === 'delivery' ? 'The Tim Hortons delivery cart' : `The website cart at ${result.branch.selected_quote}`;
+    const merchant = `The website cart at ${result.branch.selected_quote}`;
     result.spoken = `${merchant} contains ${cart}.${delivery} ${Number.isFinite(result.total_cad) ? `The verified total is ${result.total_cad.toFixed(2)} Canadian dollars. Shall I place this exact order?` : 'The website has not shown an exact final total yet. I will not submit the order until the total is known and approved.'}`;
     if (Number.isFinite(result.total_cad) && result.total_cad > task.request.budgetCad) {
       result.status = 'needs_review';
@@ -449,6 +482,10 @@ async function route(req, res) {
     if (cfg.BROWSER_ORDER_OPERATOR !== 'true') return json(res, 409, { error: 'Computer-use operator mode is not enabled.' });
     const ownerCookie = cookieSession(req);
     if (req.headers.cookie && !ownerCookie) return json(res, 401, { error: 'The supplied demo session expired.' });
+    if (path === '/api/operator/page' && req.method === 'GET') {
+      if (!profileBridge?.isConnected()) return json(res, 409, { error: 'The signed-in Tim Hortons profile is disconnected.' });
+      return json(res, 200, await profileBridge.driver().snapshot(0));
+    }
     if (path === '/api/operator/task' && req.method === 'GET') {
       const requestedId = new URL(req.url, 'http://localhost').searchParams.get('task_id');
       const task = requestedId ? jobs.get(requestedId) : [...jobs.values()].filter(value => value.kind === 'web_order' && (!ownerCookie || value.sessionId === ownerCookie.id)).sort((left, right) => right.createdAt - left.createdAt)[0];
@@ -503,7 +540,7 @@ async function route(req, res) {
         return json(res, 200, task.public);
       } finally { task.operatorReportPending = false; }
     }
-    if (task.submitStarted || task.public.purchase_attempted || task.public.order_submitted || !['awaiting_operator', 'needs_review', 'waiting_user', 'needs_input', 'cart_prepared', 'unavailable', 'needs_setup'].includes(task.public.status)) return json(res, 409, { error: 'This task cannot accept preparation evidence in its current state.' });
+    if (task.submitStarted || task.public.purchase_attempted || task.public.order_submitted || !['awaiting_operator', 'needs_review', 'waiting_user', 'needs_input', 'needs_takeover', 'cart_prepared', 'unavailable', 'needs_setup'].includes(task.public.status)) return json(res, 409, { error: 'This task cannot accept preparation evidence in its current state.' });
     if (task.operatorReportPending) return json(res, 409, { error: 'A website evidence report is already being checked.' });
     task.operatorReportPending = true;
     try {

@@ -78,3 +78,36 @@ test('mismatched branch JSON-LD or an external ordering link fails closed', asyn
     assert.equal(result.pickupUrl, undefined);
   }
 });
+
+const delivery = (href = 'https://timhortons.ca/menu?locale-selected=0&amp;lang=en&amp;store-number=105340&amp;service-mode=DELIVERY', label = 'Order Delivery') => `<a href="${href}" aria-label="${label}">${label}</a>`;
+
+test('delivery URL is copied from the unique explicit same-store official delivery anchor', async () => {
+  const { resolve } = await resolver(branch() + delivery());
+  const result = await resolve('650 W Georgia St, Vancouver BC');
+  assert.equal(result.ok, true);
+  assert.equal(result.deliveryUrl, 'https://timhortons.ca/menu?locale-selected=0&lang=en&store-number=105340&service-mode=DELIVERY');
+  assert.equal(result.deliveryUrl, result.delivery_url);
+  assert.equal(result.delivery_link_is_candidate, true);
+  assert.equal(result.requires_live_branch_verification, true);
+  assert.equal(result.delivery_link_status, 'published_branch_candidate');
+});
+
+test('missing, featured, external, conflicting or different-store delivery links never produce an invented delivery URL', async () => {
+  for (const addition of [
+    '',
+    delivery(undefined, 'Order Now'),
+    delivery('https://example.com/menu?store-number=105340&amp;service-mode=DELIVERY'),
+    delivery('https://timhortons.ca/menu?store-number=99999&amp;service-mode=DELIVERY'),
+    delivery() + delivery('https://timhortons.ca/menu?store-number=99999&amp;service-mode=DELIVERY'),
+    delivery('https://timhortons.ca/menu?store-number=105340&amp;service-mode=TAKEOUT'),
+  ]) {
+    const { resolve } = await resolver(branch() + addition);
+    const result = await resolve('650 W Georgia St, Vancouver BC');
+    assert.equal(result.ok, true);
+    assert.equal(result.delivery_url, null);
+    assert.equal(result.deliveryUrl, null);
+    assert.equal(result.delivery_link_is_candidate, false);
+    assert.equal(result.delivery_link_status, 'not_published_or_unverified');
+    assert.ok(result.pickupUrl.includes('service-mode=TAKEOUT'));
+  }
+});

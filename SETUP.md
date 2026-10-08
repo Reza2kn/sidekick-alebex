@@ -1,6 +1,6 @@
 # Running Sidekick
 
-Use Node.js 22 or newer and Google Chrome on the host laptop. The current website flow requires an active Codex operator with computer-use access to the signed-in Tim Hortons tab. OpenAI proposes browser actions and reads checkout evidence; it does not replace that operator or authorize a purchase.
+Use Node.js 22 or newer and Google Chrome on the host laptop. OpenAI can prepare a cart through the scoped Chrome bridge when the preparation executor is enabled. An active Codex operator is still required for private checkout fields and final submission. The model cannot authorize a purchase.
 
 ## Private configuration
 
@@ -38,12 +38,13 @@ This creates a new access token; run it once during initial setup. Keep `.env.lo
 | `OPENAI_API_KEY`, `BROWSER_ORDER_PROVIDER=openai` | OpenAI DOM planning and checkout evidence |
 | `OPENAI_BROWSER_MODEL` | Defaults to `gpt-6-luna` |
 | `OPENAI_BROWSER_USE_DECISIONS=true` | Optional fixed-choice target proposal when the caller supplies an explicit `next_goal`; otherwise Responses is used |
-| `BROWSER_ORDER_OPERATOR=true` | Queues requests for the active Codex operator; does not start unattended browser mutations |
+| `BROWSER_ORDER_OPERATOR=true` | Keeps final payment under operator control |
+| `BROWSER_ORDER_PREPARE_EXECUTOR=openai` | Starts bounded cart preparation immediately; private fields pause for takeover |
 | `PROFILE_BROWSER_REQUIRED=true`, `PROFILE_PAIR_TOKEN` | Requires the privately paired, signed-in Chrome profile |
 | `ALEBEX_CALLER_AGENT_ID`, `ALEBEX_WEBHOOK_SECRET` | Account-specific values written by `configure-agents.mjs` |
 | `TWILIO_CALLER_VERIFIED=false` | Keeps optional outbound phone tasks disabled |
 
-The app still uses the OpenRouter key for vision and its website-capability readiness check, so configure both provider keys for this build. Nearby places, City washrooms, fountains, and official Tim Hortons branch lookup use public sources without a paid location key. Keep `PORT=4317`: the extension and profile bridge currently use that fixed local port.
+The app uses the OpenRouter key for vision and the selected browser provider key for website readiness, so configure both provider keys for this build. Nearby places, City washrooms, fountains, and official Tim Hortons branch lookup use public sources without a paid location key. Keep `PORT=4317`: the extension and profile bridge currently use that fixed local port.
 
 ## Agents and Chrome
 

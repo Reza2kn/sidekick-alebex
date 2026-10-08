@@ -57,6 +57,7 @@ async function refreshCapabilities() {
     if (!response.ok) return;
     const status = await response.json();
     updateCapabilities(status.capabilities);
+    if (status.task) presentWebsiteUpdate({ ...status.task, type: 'job_update' });
   } catch { /* Keep the last verified state if a transient status read fails. */ }
 }
 function refreshDeviceLocation() {
@@ -110,11 +111,17 @@ function conversation(role, value) {
   $('conversation-count').textContent = `${state.conversationCount} messages`;
   $('conversation').scrollTop = $('conversation').scrollHeight;
 }
+function presentWebsiteUpdate(event) {
+  const signature = JSON.stringify([event.task_id, event.status, event.spoken, event.total_cad, event.order_submitted, event.preview_url]);
+  if (state.lastWebsiteUpdate === signature) return;
+  state.lastWebsiteUpdate = signature;
+  activity(event);
+}
 function websiteTaskPresentation(event) {
   const rawStatus = String(event.status || event.state || event.result?.status || '');
   const submitted = event.order_submitted === true || (event.order_submitted === undefined && event.result?.order_submitted === true);
   const unverifiedCompletion = /^(ordered|submitted|order_confirmed|completed|complete|success|succeeded)$/.test(rawStatus) && !submitted;
-  const labels = { queued: 'Task queued', awaiting_operator: 'Checking the website', browsing: 'Checking the website', preparing: 'Preparing your cart', cart_prepared: 'Cart prepared', cart_ready: 'Ready for your approval', ready_for_review: 'Ready for your approval', verifying_approval: 'Checking your approved cart', submitting: 'Submitting your approved order', checking_confirmation: 'Checking for an order confirmation', ordered: 'Order confirmed', unknown: 'Order outcome unconfirmed', needs_takeover: 'Secure website needs your attention', needs_review: 'Fresh cart review needed', needs_input: 'More details needed', needs_details: 'More details needed', waiting_user: 'Waiting for your answer', unavailable: 'Website task unavailable', failed: 'Website task could not finish', cancelled: 'Task cancelled' };
+  const labels = { queued: 'Task queued', awaiting_operator: 'Waiting for browser operator', browsing: 'Checking the website', preparing: 'Preparing your cart', cart_prepared: 'Cart prepared', cart_ready: 'Ready for your approval', ready_for_review: 'Ready for your approval', verifying_approval: 'Checking your approved cart', submitting: 'Submitting your approved order', checking_confirmation: 'Checking for an order confirmation', ordered: 'Order confirmed', unknown: 'Order outcome unconfirmed', needs_takeover: 'Secure website needs your attention', needs_review: 'Fresh cart review needed', needs_input: 'More details needed', needs_details: 'More details needed', waiting_user: 'Waiting for your answer', unavailable: 'Website task unavailable', failed: 'Website task could not finish', cancelled: 'Task cancelled' };
   return { status: unverifiedCompletion ? 'Order outcome unconfirmed' : labels[rawStatus] || rawStatus.replace(/_/g, ' '), unverifiedCompletion };
 }
 function activity(event) {
@@ -207,7 +214,7 @@ async function handleEvent(event) {
     case 'transcription': if (event.is_final === true || event.final === true || event.status === 'final') conversation(event.role || 'user', event.content || event.text || event.transcript); break;
     case 'snapshot_request': await answerSnapshot(event); break;
     case 'tool_activity':
-    case 'job_update': activity(event); break;
+    case 'job_update': presentWebsiteUpdate(event); break;
     case 'event_status':
     case 'call_event_status': {
       const status = event.status || event.state || 'received';
